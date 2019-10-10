@@ -47,3 +47,25 @@ stages:
               goals: 'package'
               mavenOptions: $(MAVEN_OPTS)
               options: '-B --settings azure-mvn-settings.xml -DskipTests=true -Dno-format'
+      - job: Cache_Windows_Maven_Repo #windows has different line endings so the cache key is different
+        displayName: 'Windows Maven Repo'
+        timeoutInMinutes: 30
+        pool:
+          vmImage: 'vs2017-win2016'
+        variables:
+          imageName: 'quarkus-windows:$(build.buildId)'
+        steps:
+          - task: CacheBeta@0
+            displayName: 'Cache Maven local repo'
+            inputs:
+              key: mavenWindows | pom.xml
+              path: $(MAVEN_CACHE_FOLDER)
+              securityNamespace: cache
+              cacheHitVar: CACHE_RESTORED
+          - task: Maven@3
+            displayName: 'Maven Build'
+            condition: ne(variables.CACHE_RESTORED, 'true')
+            inputs:
+              goals: 'package'
+              mavenOptions: $(MAVEN_OPTS)
+              options: '-B --settings azure-mvn-settings.xml -DskipTests=true -Dno-format'

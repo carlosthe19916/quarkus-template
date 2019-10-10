@@ -1,0 +1,49 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - master
+
+pr:
+  branches:
+    include:
+      - master
+
+variables:
+  MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository/
+  MAVEN_OPTS: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)'
+  QUARKUS_LOCAL_REPO: $(MAVEN_CACHE_FOLDER)
+
+stages:
+  #This stage uses the azure caching feature to reduce the downloads that are performed from central, which greatly speeds up CI
+  #This is it's own stage to prevent Quarkus artifacts produced by the build from being cached
+  - stage: cache_maven_repo_stage
+    displayName: 'Maven Cache'
+    jobs:
+      - job: Cache_Maven_Repo
+        displayName: 'Linux Maven Repo'
+        timeoutInMinutes: 30
+        pool:
+          vmImage: 'Ubuntu 16.04'
+        variables:
+          imageName: 'quarkus:$(build.buildId)'
+        steps:
+          - task: CacheBeta@0
+            displayName: 'Cache Maven local repo'
+            inputs:
+              key: maven | bom/runtime/pom.xml   #if we attempt to use all poms then when they get copied to target everything breaks. This should be good enough, it does not need to be perfect
+              path: $(MAVEN_CACHE_FOLDER)
+              securityNamespace: cache
+              cacheHitVar: CACHE_RESTORED
+          - task: Maven@3
+            displayName: 'Maven Build'
+            condition: ne(variables.CACHE_RESTORED, 'true')
+            inputs:
+              goals: 'package'
+              mavenOptions: $(MAVEN_OPTS)
+              options: '-B --settings azure-mvn-settings.xml -DskipTests=true -Dno-format'
